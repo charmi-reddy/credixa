@@ -365,6 +365,45 @@ def _account_holds_asset(address: str, asa_id: int) -> bool:
     return False
 
 
+def _validate_atomic_funding_group(
+    signed_txn_b64_list: list[str],
+    investor: str,
+    supplier: str,
+    amount: int,
+    asa_id: int,
+) -> tuple[str, str]:
+    try:
+        stx1 = encoding.msgpack_decode(signed_txn_b64_list[0])
+        stx2 = encoding.msgpack_decode(signed_txn_b64_list[1])
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Unable to decode signed group transactions: {e}")
+
+    tx1 = stx1.transaction
+    tx2 = stx2.transaction
+
+    if tx1.type != "pay":
+        raise HTTPException(status_code=400, detail="Transaction 1 must be PaymentTxn")
+    if tx2.type != "axfer":
+        raise HTTPException(status_code=400, detail="Transaction 2 must be AssetTransferTxn")
+
+    if tx1.sender != investor or tx1.receiver != supplier:
+        raise HTTPException(status_code=400, detail="PaymentTxn direction must be investor -> supplier")
+    if int(tx1.amt) != int(amount):
+        raise HTTPException(status_code=400, detail="PaymentTxn amount must match invoice amount")
+
+    if tx2.sender != supplier or tx2.receiver != investor:
+        raise HTTPException(status_code=400, detail="AssetTransferTxn direction must be supplier -> investor")
+    if int(tx2.index) != int(asa_id) or int(tx2.amount) != 1:
+        raise HTTPException(status_code=400, detail="AssetTransferTxn must transfer exactly 1 unit of the invoice ASA")
+
+    if tx1.group is None or tx2.group is None:
+        raise HTTPException(status_code=400, detail="Both transactions must include a group id")
+    if tx1.group != tx2.group:
+        raise HTTPException(status_code=400, detail="Transactions must share the same group id")
+
+    return tx1.get_txid(), tx2.get_txid()
+
+
 @app.post("/asa/invoices/create/prepare")
 def asa_create_invoice_prepare(req: AsaCreatePrepareReq):
     try:
@@ -480,6 +519,7 @@ def asa_prepare_funding(invoice_id: Union[int, str], req: InvoiceFundingPrepareR
             "message": "Unsigned atomic funding group prepared",
             "invoice_id": invoice_id,
             "asa_id": asa_id,
+            "group_id": base64.b64encode(payment_txn.group).decode("utf-8") if payment_txn.group else None,
             "unsigned_group_txns": [
                 _to_base64_txn(payment_txn),
                 _to_base64_txn(asa_transfer_txn),
@@ -501,7 +541,23 @@ def asa_submit_funding(invoice_id: Union[int, str], req: InvoiceFundingSubmitReq
         if asa_id <= 0:
             raise RuntimeError("Invoice is not tokenized yet (missing asa_id)")
 
+        supplier = invoice.get("owner", "")
+        if not supplier:
+            raise RuntimeError("Invoice owner is missing")
+
+        amount = int(float(invoice.get("amount") or 0))
+        if amount <= 0:
+            raise RuntimeError("Invalid invoice amount")
+
         raw_signed_b64 = [_normalize_signed_txn(stxn) for stxn in req.signed_txns]
+        pay_txid, axfer_txid = _validate_atomic_funding_group(
+            signed_txn_b64_list=raw_signed_b64,
+            investor=req.investor,
+            supplier=supplier,
+            amount=amount,
+            asa_id=asa_id,
+        )
+
         grouped_blob = b"".join(base64.b64decode(stxn) for stxn in raw_signed_b64)
         grouped_blob_b64 = base64.b64encode(grouped_blob).decode("utf-8")
         tx_id = algod.send_raw_transaction(grouped_blob_b64)
@@ -514,6 +570,8 @@ def asa_submit_funding(invoice_id: Union[int, str], req: InvoiceFundingSubmitReq
         return {
             "message": "Invoice funding completed atomically",
             "tx_id": tx_id,
+            "payment_tx_id": pay_txid,
+            "asset_transfer_tx_id": axfer_txid,
             "invoice": updated,
         }
     except HTTPException:
