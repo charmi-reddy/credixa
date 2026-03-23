@@ -1,7 +1,9 @@
 {
   "scripts": {
     "build:wallet": "esbuild frontend-src/pera-wallet-entry.js --bundle --format=iife --platform=browser --target=es2018 --outfile=backend/static/pera-wallet.bundle.js",
-    "build:wallet:watch": "esbuild frontend-src/pera-wallet-entry.js --bundle --format=iife --platform=browser --target=es2018 --outfile=backend/static/pera-wallet.bundle.js --watch"
+    "build:wallet:watch": "esbuild frontend-src/pera-wallet-entry.js --bundle --format=iife --platform=browser --target=es2018 --outfile=backend/static/pera-wallet.bundle.js --watch",
+    "build:app": "esbuild frontend-src/app-entry.js --bundle --format=iife --platform=browser --target=es2018 --outfile=backend/static/app.bundle.js",
+    "build:app:watch": "esbuild frontend-src/app-entry.js --bundle --format=iife --platform=browser --target=es2018 --outfile=backend/static/app.bundle.js --watch"
   },
   "devDependencies": {
     "esbuild": "^0.25.2"
