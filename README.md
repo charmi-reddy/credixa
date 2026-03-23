@@ -15,3 +15,9 @@ The system uses blockchain technology to ensure that every transaction is safe, 
 
 ###  Why it matters
 Credixa makes financial systems faster, more transparent, and more accessible—especially for small businesses that struggle with delayed payments.
+
+### How to run:
+- algokit localnet start (backend - docker)
+- python backend/app.py (if already in .venv)
+- Frontend: Open http://localhost:8000 (http://127.0.0.1:8000/)
+- Backend: powershell -Command ".venv\Scripts\python.exe backend\app.py" 
