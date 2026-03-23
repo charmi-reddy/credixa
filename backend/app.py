@@ -411,11 +411,20 @@ def asa_create_invoice_submit(req: AsaCreateSubmitReq):
         if not asa_id:
             raise RuntimeError("ASA creation succeeded but asset-index missing in confirmation")
 
+        invoice = fetch_invoice_by_id(req.invoice_id)
+        supplier = invoice.get("owner", "")
+        if not supplier:
+            raise RuntimeError("Invoice owner is missing; cannot verify ASA ownership")
+
+        if not _account_holds_asset(supplier, asa_id):
+            raise RuntimeError("Supplier does not hold the newly created ASA")
+
         updated = update_invoice_asa_record(invoice_id=req.invoice_id, asa_id=asa_id, status="TOKENIZED")
         return {
             "message": "Invoice tokenized successfully",
             "tx_id": tx_id,
             "asa_id": asa_id,
+            "owner_verified": True,
             "invoice": updated,
         }
     except HTTPException:
@@ -443,6 +452,9 @@ def asa_prepare_funding(invoice_id: Union[int, str], req: InvoiceFundingPrepareR
             raise RuntimeError("Invoice is not tokenized yet (missing asa_id)")
 
         supplier = invoice["owner"]
+        if not _account_holds_asset(supplier, asa_id):
+            raise RuntimeError("Current invoice owner does not hold the ASA")
+
         amount = int(float(invoice["amount"]))
         if amount <= 0:
             raise RuntimeError("Invalid invoice amount")
@@ -484,10 +496,19 @@ def asa_submit_funding(invoice_id: Union[int, str], req: InvoiceFundingSubmitReq
         if len(req.signed_txns) != 2:
             raise HTTPException(status_code=400, detail="signed_txns must contain exactly 2 signed transactions")
 
+        invoice = fetch_invoice_by_id(invoice_id)
+        asa_id = int(invoice.get("asa_id") or 0)
+        if asa_id <= 0:
+            raise RuntimeError("Invoice is not tokenized yet (missing asa_id)")
+
         raw_signed_b64 = [_normalize_signed_txn(stxn) for stxn in req.signed_txns]
         grouped_blob = b"".join(base64.b64decode(stxn) for stxn in raw_signed_b64)
-        tx_id = algod.send_raw_transaction(grouped_blob)
+        grouped_blob_b64 = base64.b64encode(grouped_blob).decode("utf-8")
+        tx_id = algod.send_raw_transaction(grouped_blob_b64)
         transaction.wait_for_confirmation(algod, tx_id, 4)
+
+        if not _account_holds_asset(req.investor, asa_id):
+            raise RuntimeError("Funding transaction confirmed but investor does not hold the ASA")
 
         updated = update_invoice_funded_record(invoice_id=invoice_id, owner=req.investor, algo_tx_id=tx_id)
         return {
