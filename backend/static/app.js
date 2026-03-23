@@ -68,67 +68,19 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     document.getElementById('btnDeploy').addEventListener('click', async (e) => {
-        try {
-            e.target.disabled = true;
-            e.target.textContent = 'Deploying...';
-            deployStatus.textContent = '';
-            
-            const data = await req('/deploy', 'POST');
-            deployStatus.textContent = `App ID: ${data.app_id} | Supplier: ${data.supplier.slice(0,8)}... | Investor: ${data.investor.slice(0,8)}...`;
-            
-            await updateState();
-            
-            if(!pollInterval) {
-                pollInterval = setInterval(updateState, 3000);
-            }
-        } catch(err) {
-            alert('Deploy Error: ' + err.message);
-        } finally {
-            e.target.disabled = false;
-            e.target.textContent = 'Deploy Contract';
-        }
+        deployStatus.textContent = 'Disabled: backend signing removed. Use the ASA wallet flow section below.';
     });
 
     document.getElementById('btnCreate').addEventListener('click', async (e) => {
-        const amount = document.getElementById('invoiceAmount').value || 0;
-        try {
-            e.target.disabled = true;
-            await req('/create_invoice', 'POST', { amount: parseInt(amount) });
-            await updateState();
-            alert('Invoice created successfully!');
-        } catch(err) {
-            alert('Create Error: ' + err.message);
-        } finally {
-            e.target.disabled = false;
-        }
+        alert('Disabled: backend signing removed. Use ASA wallet flow: Prepare Tokenize Txn.');
     });
 
     document.getElementById('btnRequestFinancing').addEventListener('click', async (e) => {
-        try {
-            e.target.disabled = true;
-            await req('/request_financing', 'POST');
-            await updateState();
-            alert('Financing requested!');
-        } catch(err) {
-            alert('Request Error: ' + err.message);
-        } finally {
-            e.target.disabled = false;
-        }
+        alert('Disabled: backend signing removed. Use ASA wallet flow only.');
     });
 
     document.getElementById('btnFund').addEventListener('click', async (e) => {
-        try {
-            e.target.disabled = true;
-            e.target.textContent = 'Processing Atomic Transaction...';
-            await req('/fund_invoice', 'POST');
-            await updateState();
-            alert('Invoice funded atomically!');
-        } catch(err) {
-            alert('Fund Error: ' + err.message);
-        } finally {
-            e.target.disabled = false;
-            e.target.textContent = 'Fund Atomically';
-        }
+        alert('Disabled: backend signing removed. Use ASA wallet flow: Prepare Funding Group + wallet signatures.');
     });
 
     document.getElementById('btnRefresh').addEventListener('click', updateState);

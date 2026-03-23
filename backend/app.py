@@ -5,10 +5,8 @@ from pydantic import BaseModel
 from typing import Any, Union
 import base64
 import os
-import sys
 import traceback
 
-import algokit_utils
 from algokit_utils import AlgorandClient
 from algokit_utils.applications import Arc56Contract
 from algosdk import encoding
@@ -65,19 +63,6 @@ algod = AlgodClient(
     os.getenv("ALGORAND_ALGOD_ADDRESS", "http://localhost:4001"),
 )
 
-def get_signer_account(name: str):
-    print(f"Getting account for: {name}")
-    sys.stdout.flush()
-    try:
-        acc = algorand.account.from_kmd(name)
-        print(f"Got account: {acc.address}")
-        sys.stdout.flush()
-        return acc
-    except Exception as e:
-        print(f"Error getting account {name}: {e}")
-        sys.stdout.flush()
-        raise
-
 def load_contract_spec():
     base_dir = os.path.dirname(os.path.abspath(__file__))
     # The file is at backend/artifacts/... relative to app.py
@@ -105,37 +90,10 @@ def read_root():
 
 @app.post("/deploy")
 def deploy_contract():
-    try:
-        supplier = get_signer_account("supplier")
-        
-        investor = get_signer_account("investor")
-
-        app_spec = load_contract_spec()
-            
-        # Deploy using AppFactory
-        factory = algorand.client.get_app_factory(
-            app_spec=app_spec,
-            default_sender=supplier.address
-        )
-        
-        # In Algokit 4.x, factory.deploy() returns a tuple: (AppClient, AppFactoryDeployResult)
-        _, response = factory.deploy()
-        
-        # Persist to Supabase
-        update_app_state(
-            app_id=response.app.app_id,
-            supplier_addr=supplier.address,
-            investor_addr=investor.address
-        )
-
-        runtime_app_state["app_id"] = response.app.app_id
-        runtime_app_state["supplier_addr"] = supplier.address
-        runtime_app_state["investor_addr"] = investor.address
-        
-        return {"message": "Contract deployed", "app_id": response.app.app_id, "supplier": supplier.address, "investor": investor.address}
-    except Exception as e:
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+    raise HTTPException(
+        status_code=410,
+        detail="Disabled: backend signing is not allowed. Use wallet-based ASA endpoints only.",
+    )
 
 class InvoiceCreateReq(BaseModel):
     amount: int  # microAlgos
@@ -171,95 +129,24 @@ class InvoiceFundingSubmitReq(BaseModel):
 
 @app.post("/create_invoice")
 def create_invoice(req: InvoiceCreateReq):
-    try:
-        if not state.app_id:
-            raise Exception("Contract not deployed")
-
-        supplier = get_signer_account("supplier")
-        app_spec = load_contract_spec()
-            
-        app_client = algorand.client.get_app_client_by_id(
-            app_spec=app_spec,
-            app_id=state.app_id,
-            default_sender=supplier.address
-        )
-        
-        app_client.send.call(algokit_utils.AppCallMethodCallParams(
-            method="create_invoice",
-            sender=supplier.address,
-            app_id=state.app_id,
-            args=[req.amount]
-        ))
-        return {"message": "Invoice created successfully"}
-    except Exception as e:
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+    raise HTTPException(
+        status_code=410,
+        detail="Disabled: backend signing is not allowed. Use /asa/invoices/create/prepare and wallet signing.",
+    )
 
 @app.post("/request_financing")
 def request_financing():
-    try:
-        if not state.app_id:
-            raise Exception("Contract not deployed")
-
-        supplier = get_signer_account("supplier")
-        app_spec = load_contract_spec()
-            
-        app_client = algorand.client.get_app_client_by_id(
-            app_spec=app_spec,
-            app_id=state.app_id,
-            default_sender=supplier.address
-        )
-        
-        app_client.send.call(algokit_utils.AppCallMethodCallParams(
-            method="request_financing",
-            sender=supplier.address,
-            app_id=state.app_id,
-        ))
-        return {"message": "Financing requested successfully"}
-    except Exception as e:
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+    raise HTTPException(
+        status_code=410,
+        detail="Disabled: backend signing is not allowed. Use ASA wallet flow.",
+    )
 
 @app.post("/fund_invoice")
 def fund_invoice():
-    try:
-        if not state.app_id:
-            raise Exception("Contract not deployed")
-
-        investor = get_signer_account("investor")
-        app_spec = load_contract_spec()
-            
-        app_client = algorand.client.get_app_client_by_id(
-            app_spec=app_spec,
-            app_id=state.app_id,
-            default_sender=investor.address
-        )
-        
-        # Read state to get the amount
-        gs = app_client.get_global_state()
-        amount_micro_algo = int(gs.get("amount").value) if "amount" in gs else 0
-        if amount_micro_algo <= 0:
-            raise Exception("Invalid invoice amount in global state")
-        
-        # Create payment txn
-        payment = algorand.create_transaction.payment(
-            algokit_utils.PaymentParams(
-                sender=investor.address,
-                receiver=state.supplier_addr,
-                amount=algokit_utils.AlgoAmount.from_micro_algo(amount_micro_algo)
-            )
-        )
-        
-        app_client.send.call(algokit_utils.AppCallMethodCallParams(
-            method="fund_invoice",
-            sender=investor.address,
-            app_id=state.app_id,
-            args=[payment]
-        ))
-        return {"message": "Invoice funded atomically"}
-    except Exception as e:
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+    raise HTTPException(
+        status_code=410,
+        detail="Disabled: backend signing is not allowed. Use /asa/invoices/{id}/fund/prepare and wallet signing.",
+    )
 
 @app.get("/status")
 def get_status():
