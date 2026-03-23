@@ -113,14 +113,30 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnConnectWallet) {
         btnConnectWallet.addEventListener('click', async () => {
             try {
-                if (!window.PeraWalletConnect || !window.PeraWalletConnect.PeraWalletConnect) {
-                    throw new Error('Pera Wallet SDK not loaded in browser');
-                }
                 if (!peraWallet) {
-                    peraWallet = new window.PeraWalletConnect.PeraWalletConnect();
+                    const sdk = window.PeraWalletConnect;
+                    let WalletCtor = null;
+
+                    if (typeof sdk === 'function') {
+                        WalletCtor = sdk;
+                    } else if (sdk && typeof sdk.PeraWalletConnect === 'function') {
+                        WalletCtor = sdk.PeraWalletConnect;
+                    } else if (window.perawallet && typeof window.perawallet.PeraWalletConnect === 'function') {
+                        WalletCtor = window.perawallet.PeraWalletConnect;
+                    }
+
+                    if (!WalletCtor) {
+                        throw new Error('Pera Wallet SDK not loaded. Refresh page once and try again.');
+                    }
+
+                    peraWallet = new WalletCtor();
                 }
+
                 const accounts = await peraWallet.connect();
                 connectedAccount = (accounts && accounts[0]) || '';
+                if (!connectedAccount) {
+                    throw new Error('Wallet connected but no account was returned');
+                }
                 writeAsaOutput({ message: 'Wallet connected', account: connectedAccount });
             } catch (err) {
                 writeAsaOutput(`Wallet connect error: ${err.message}`);
