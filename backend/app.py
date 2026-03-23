@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from typing import Union
 import json
 import os
 import sys
@@ -10,6 +11,16 @@ import traceback
 import algokit_utils
 from algokit_utils import AlgorandClient
 from algokit_utils.applications import Arc56Contract
+from .db import (
+    get_app_state,
+    update_app_state,
+    test_supabase_connection,
+    create_invoice_record,
+    fetch_all_invoices,
+    update_invoice_status_record,
+    insert_sample_invoice,
+    fetch_invoice_by_id,
+)
 
 app = FastAPI()
 
@@ -19,9 +30,17 @@ app.mount("/static", StaticFiles(directory="backend/static"), name="static")
 
 # State to hold app ID of the deployed contract
 class AppState:
-    app_id: int = 0
-    supplier_addr: str = ""
-    investor_addr: str = ""
+    @property
+    def app_id(self) -> int:
+        return get_app_state().get("app_id", 0)
+    
+    @property
+    def supplier_addr(self) -> str:
+        return get_app_state().get("supplier_addr", "")
+    
+    @property
+    def investor_addr(self) -> str:
+        return get_app_state().get("investor_addr", "")
 
 state = AppState()
 
@@ -85,15 +104,31 @@ def deploy_contract():
         
         # In Algokit 4.x, factory.deploy() returns a tuple: (AppClient, AppFactoryDeployResult)
         _, response = factory.deploy()
-        state.app_id = response.app.app_id
         
-        return {"message": "Contract deployed", "app_id": state.app_id, "supplier": state.supplier_addr, "investor": state.investor_addr}
+        # Persist to Supabase
+        update_app_state(
+            app_id=response.app.app_id,
+            supplier_addr=supplier.address,
+            investor_addr=investor.address
+        )
+        
+        return {"message": "Contract deployed", "app_id": response.app.app_id, "supplier": supplier.address, "investor": investor.address}
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 class InvoiceCreateReq(BaseModel):
     amount: int  # microAlgos
+
+
+class DbInvoiceCreateReq(BaseModel):
+    amount: float
+    owner: str
+    status: str = "pending"
+
+
+class InvoiceStatusUpdateReq(BaseModel):
+    status: str
 
 @app.post("/create_invoice")
 def create_invoice(req: InvoiceCreateReq):
@@ -196,6 +231,57 @@ def get_status():
     except Exception as e:
         traceback.print_exc()
         return {"error": str(e)}
+
+
+@app.get("/supabase/test")
+def supabase_test():
+    try:
+        return test_supabase_connection()
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/invoices")
+def create_invoice_db(req: DbInvoiceCreateReq):
+    try:
+        return create_invoice_record(amount=req.amount, owner=req.owner, status=req.status)
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/invoices")
+def get_invoices_db():
+    try:
+        return {"invoices": fetch_all_invoices()}
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.patch("/invoices/{invoice_id}/status")
+def update_invoice_status(invoice_id: Union[int, str], req: InvoiceStatusUpdateReq):
+    try:
+        return update_invoice_status_record(invoice_id=invoice_id, status=req.status)
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/invoices/seed-test")
+def seed_and_fetch_invoice_test():
+    try:
+        inserted = insert_sample_invoice()
+        fetched = fetch_invoice_by_id(inserted["id"])
+        return {
+            "message": "Sample invoice inserted and fetched successfully",
+            "inserted": inserted,
+            "fetched": fetched,
+        }
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn

@@ -49,6 +49,7 @@ node_modules/
 # Logs and outputs
 out.txt
 reproduce_out.txt
+backup.txt
 
 # Test files (optional, uncomment if needed)
 # test_*.py

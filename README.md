@@ -21,3 +21,16 @@ Credixa makes financial systems faster, more transparent, and more accessible—
 - python backend/app.py (if already in .venv)
 - Frontend: Open http://localhost:8000 (http://127.0.0.1:8000/)
 - Backend: powershell -Command ".venv\Scripts\python.exe backend\app.py" 
+
+### Supabase setup
+- Copy `.env.example` to `.env` and set:
+	- `SUPABASE_URL`
+	- `SUPABASE_KEY` (anon key)
+- If `invoices` table is missing, run SQL from `backend/create_invoices.sql` in Supabase SQL Editor.
+
+### Supabase invoice routes
+- `GET /supabase/test` → checks Supabase connectivity and fetches invoice rows
+- `POST /invoices` with JSON body: `{ "amount": 1200.5, "owner": "alice", "status": "pending" }`
+- `GET /invoices` → fetch all invoices
+- `PATCH /invoices/{invoice_id}/status` with JSON body: `{ "status": "funded" }`
+- `POST /invoices/seed-test` → inserts sample invoice and fetches it back (end-to-end check)

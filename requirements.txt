@@ -6,3 +6,4 @@ pydantic
 python-dotenv
 typing-extensions
 py-algorand-sdk
+supabase
