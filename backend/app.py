@@ -2,8 +2,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from typing import Union
-import json
+from typing import Any, Union
+import base64
 import os
 import sys
 import traceback
@@ -11,6 +11,9 @@ import traceback
 import algokit_utils
 from algokit_utils import AlgorandClient
 from algokit_utils.applications import Arc56Contract
+from algosdk import encoding
+from algosdk import transaction
+from algosdk.v2client.algod import AlgodClient
 from .db import (
     get_app_state,
     update_app_state,
@@ -20,6 +23,8 @@ from .db import (
     update_invoice_status_record,
     insert_sample_invoice,
     fetch_invoice_by_id,
+    update_invoice_asa_record,
+    update_invoice_funded_record,
 )
 
 app = FastAPI()
@@ -55,6 +60,10 @@ state = AppState()
 
 # Algorand Client
 algorand = AlgorandClient.default_localnet()
+algod = AlgodClient(
+    os.getenv("ALGORAND_ALGOD_TOKEN", "a" * 64),
+    os.getenv("ALGORAND_ALGOD_ADDRESS", "http://localhost:4001"),
+)
 
 def get_signer_account(name: str):
     print(f"Getting account for: {name}")
@@ -140,6 +149,25 @@ class DbInvoiceCreateReq(BaseModel):
 
 class InvoiceStatusUpdateReq(BaseModel):
     status: str
+
+
+class AsaCreatePrepareReq(BaseModel):
+    amount: int
+    supplier: str
+
+
+class AsaCreateSubmitReq(BaseModel):
+    invoice_id: int
+    signed_txn: str
+
+
+class InvoiceFundingPrepareReq(BaseModel):
+    investor: str
+
+
+class InvoiceFundingSubmitReq(BaseModel):
+    investor: str
+    signed_txns: list[str]
 
 @app.post("/create_invoice")
 def create_invoice(req: InvoiceCreateReq):
@@ -297,6 +325,190 @@ def seed_and_fetch_invoice_test():
             "message": "Sample invoice inserted and fetched successfully",
             "inserted": inserted,
             "fetched": fetched,
+        }
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def _suggested_params() -> transaction.SuggestedParams:
+    return algod.suggested_params()
+
+
+def _to_base64_txn(txn: Any) -> str:
+    return encoding.msgpack_encode(txn)
+
+
+def _from_base64_signed_txn(signed_txn_b64: str) -> bytes:
+    try:
+        return base64.b64decode(signed_txn_b64)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid signed transaction base64: {e}")
+
+
+def _account_holds_asset(address: str, asa_id: int) -> bool:
+    account_info = algod.account_info(address)
+    for asset in account_info.get("assets", []):
+        if asset.get("asset-id") == asa_id and int(asset.get("amount", 0)) > 0:
+            return True
+    return False
+
+
+@app.post("/asa/invoices/create/prepare")
+def asa_create_invoice_prepare(req: AsaCreatePrepareReq):
+    try:
+        invoice = create_invoice_record(
+            amount=req.amount,
+            owner=req.supplier,
+            status="CREATED",
+        )
+        invoice_id = int(invoice["id"])
+
+        sp = _suggested_params()
+        asa_create_txn = transaction.AssetConfigTxn(
+            sender=req.supplier,
+            sp=sp,
+            total=1,
+            default_frozen=False,
+            unit_name="INV",
+            asset_name=f"Invoice_{invoice_id}",
+            manager=req.supplier,
+            reserve=req.supplier,
+            freeze=req.supplier,
+            clawback=req.supplier,
+            decimals=0,
+        )
+
+        return {
+            "message": "Unsigned ASA creation transaction prepared",
+            "invoice": invoice,
+            "unsigned_txn": _to_base64_txn(asa_create_txn),
+            "tx_id": asa_create_txn.get_txid(),
+            "asset_name": f"Invoice_{invoice_id}",
+        }
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/asa/invoices/create/submit")
+def asa_create_invoice_submit(req: AsaCreateSubmitReq):
+    try:
+        raw_stxn = _from_base64_signed_txn(req.signed_txn)
+        tx_id = algod.send_raw_transaction(raw_stxn)
+        confirmation = transaction.wait_for_confirmation(algod, tx_id, 4)
+        asa_id = int(confirmation.get("asset-index", 0))
+        if not asa_id:
+            raise RuntimeError("ASA creation succeeded but asset-index missing in confirmation")
+
+        updated = update_invoice_asa_record(invoice_id=req.invoice_id, asa_id=asa_id, status="TOKENIZED")
+        return {
+            "message": "Invoice tokenized successfully",
+            "tx_id": tx_id,
+            "asa_id": asa_id,
+            "invoice": updated,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/asa/invoices/{invoice_id}")
+def get_asa_invoice(invoice_id: Union[int, str]):
+    try:
+        return fetch_invoice_by_id(invoice_id)
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.post("/asa/invoices/{invoice_id}/fund/prepare")
+def asa_prepare_funding(invoice_id: Union[int, str], req: InvoiceFundingPrepareReq):
+    try:
+        invoice = fetch_invoice_by_id(invoice_id)
+        asa_id = int(invoice.get("asa_id") or 0)
+        if asa_id <= 0:
+            raise RuntimeError("Invoice is not tokenized yet (missing asa_id)")
+
+        supplier = invoice["owner"]
+        amount = int(float(invoice["amount"]))
+        if amount <= 0:
+            raise RuntimeError("Invalid invoice amount")
+
+        sp = _suggested_params()
+        payment_txn = transaction.PaymentTxn(
+            sender=req.investor,
+            sp=sp,
+            receiver=supplier,
+            amt=amount,
+        )
+        asa_transfer_txn = transaction.AssetTransferTxn(
+            sender=supplier,
+            sp=sp,
+            receiver=req.investor,
+            amt=1,
+            index=asa_id,
+        )
+
+        transaction.assign_group_id([payment_txn, asa_transfer_txn])
+
+        return {
+            "message": "Unsigned atomic funding group prepared",
+            "invoice_id": invoice_id,
+            "asa_id": asa_id,
+            "unsigned_group_txns": [
+                _to_base64_txn(payment_txn),
+                _to_base64_txn(asa_transfer_txn),
+            ],
+        }
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/asa/invoices/{invoice_id}/fund/submit")
+def asa_submit_funding(invoice_id: Union[int, str], req: InvoiceFundingSubmitReq):
+    try:
+        if len(req.signed_txns) != 2:
+            raise HTTPException(status_code=400, detail="signed_txns must contain exactly 2 signed transactions")
+
+        raw_signed = [_from_base64_signed_txn(stxn) for stxn in req.signed_txns]
+        tx_id = algod.send_raw_transaction(raw_signed)
+        transaction.wait_for_confirmation(algod, tx_id, 4)
+
+        updated = update_invoice_funded_record(invoice_id=invoice_id, owner=req.investor, algo_tx_id=tx_id)
+        return {
+            "message": "Invoice funding completed atomically",
+            "tx_id": tx_id,
+            "invoice": updated,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/asa/invoices/{invoice_id}/verify")
+def verify_invoice_owner(invoice_id: Union[int, str]):
+    try:
+        invoice = fetch_invoice_by_id(invoice_id)
+        asa_id = int(invoice.get("asa_id") or 0)
+        owner = invoice.get("owner", "")
+        if asa_id <= 0:
+            return {
+                "invoice": invoice,
+                "verified": False,
+                "reason": "Invoice has no ASA",
+            }
+
+        holds = _account_holds_asset(owner, asa_id)
+        return {
+            "invoice": invoice,
+            "verified": holds,
+            "on_chain_owner": owner if holds else "mismatch",
         }
     except Exception as e:
         traceback.print_exc()

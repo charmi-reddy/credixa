@@ -47,8 +47,42 @@
                 <button id="btnRefresh" class="btn small">Refresh State</button>
                 <pre id="stateOutput">No contract deployed yet.</pre>
             </div>
+
+            <div class="card">
+                <h2>5. MVP ASA Invoice Flow</h2>
+                <div class="input-group">
+                    <label>Supplier Address:</label>
+                    <input type="text" id="asaSupplier" placeholder="Supplier wallet address">
+                </div>
+                <div class="input-group">
+                    <label>Investor Address:</label>
+                    <input type="text" id="asaInvestor" placeholder="Investor wallet address">
+                </div>
+                <div class="input-group">
+                    <label>Amount (microAlgos):</label>
+                    <input type="number" id="asaAmount" value="1000000">
+                </div>
+                <div class="input-group">
+                    <label>Invoice ID:</label>
+                    <input type="number" id="asaInvoiceId" placeholder="Created invoice id">
+                </div>
+
+                <button id="btnConnectWallet" class="btn secondary">Connect Pera Wallet</button>
+                <button id="btnPrepareTokenize" class="btn primary">Prepare Tokenize Txn</button>
+                <button id="btnSignSubmitTokenize" class="btn accent">Sign + Submit Tokenize</button>
+
+                <h2 style="margin-top: 20px;">6. Atomic Funding Group</h2>
+                <button id="btnPrepareFund" class="btn primary">Prepare Funding Group</button>
+                <button id="btnSignInvestor" class="btn secondary">Sign as Investor</button>
+                <button id="btnSignSupplier" class="btn secondary">Sign as Supplier</button>
+                <button id="btnSubmitFund" class="btn accent">Submit Funded Group</button>
+                <button id="btnVerifyAsa" class="btn small">Verify ASA Ownership</button>
+
+                <pre id="asaOutput">ASA flow output will appear here.</pre>
+            </div>
         </main>
     </div>
+    <script src="https://unpkg.com/@perawallet/connect/dist/browser/perawalletconnect.umd.js"></script>
     <script src="/static/app.js"></script>
 </body>
 
