@@ -66,13 +66,14 @@ header p {
     transition: all 0.2s ease;
     width: 100%;
     font-size: 1rem;
+    margin-top: 10px;
 }
 
 .btn.small {
     padding: 6px 12px;
-    width: auto;
+    width: 100%;
     font-size: 0.85rem;
-    margin-bottom: 10px;
+    margin-bottom: 0;
 }
 
 .btn.primary {

@@ -67,23 +67,39 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    document.getElementById('btnDeploy').addEventListener('click', async (e) => {
-        deployStatus.textContent = 'Disabled: backend signing removed. Use the ASA wallet flow section below.';
-    });
+    const btnDeploy = document.getElementById('btnDeploy');
+    const btnCreate = document.getElementById('btnCreate');
+    const btnRequestFinancing = document.getElementById('btnRequestFinancing');
+    const btnFund = document.getElementById('btnFund');
+    const btnRefresh = document.getElementById('btnRefresh');
 
-    document.getElementById('btnCreate').addEventListener('click', async (e) => {
-        alert('Disabled: backend signing removed. Use ASA wallet flow: Prepare Tokenize Txn.');
-    });
+    if (btnDeploy) {
+        btnDeploy.addEventListener('click', async () => {
+            deployStatus.textContent = 'Disabled: backend signing removed. Use the ASA wallet flow section below.';
+        });
+    }
 
-    document.getElementById('btnRequestFinancing').addEventListener('click', async (e) => {
-        alert('Disabled: backend signing removed. Use ASA wallet flow only.');
-    });
+    if (btnCreate) {
+        btnCreate.addEventListener('click', async () => {
+            alert('Disabled: backend signing removed. Use ASA wallet flow: Prepare Tokenize Txn.');
+        });
+    }
 
-    document.getElementById('btnFund').addEventListener('click', async (e) => {
-        alert('Disabled: backend signing removed. Use ASA wallet flow: Prepare Funding Group + wallet signatures.');
-    });
+    if (btnRequestFinancing) {
+        btnRequestFinancing.addEventListener('click', async () => {
+            alert('Disabled: backend signing removed. Use ASA wallet flow only.');
+        });
+    }
 
-    document.getElementById('btnRefresh').addEventListener('click', updateState);
+    if (btnFund) {
+        btnFund.addEventListener('click', async () => {
+            alert('Disabled: backend signing removed. Use ASA wallet flow: Prepare Funding Group + wallet signatures.');
+        });
+    }
+
+    if (btnRefresh) {
+        btnRefresh.addEventListener('click', updateState);
+    }
 
     const btnConnectWallet = document.getElementById('btnConnectWallet');
     const btnPrepareTokenize = document.getElementById('btnPrepareTokenize');
