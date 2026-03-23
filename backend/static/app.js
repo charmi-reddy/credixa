@@ -1,4 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
+    const PERA_CHAIN_ID = 416002;
     const deployStatus = document.getElementById('deployStatus');
     const stateOutput = document.getElementById('stateOutput');
     const asaOutput = document.getElementById('asaOutput');
@@ -129,7 +130,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         throw new Error('Pera Wallet SDK not loaded. Refresh page once and try again.');
                     }
 
-                    peraWallet = new WalletCtor();
+                    peraWallet = new WalletCtor({ chainId: PERA_CHAIN_ID });
                 }
 
                 const accounts = await peraWallet.connect();
@@ -137,8 +138,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!connectedAccount) {
                     throw new Error('Wallet connected but no account was returned');
                 }
-                writeAsaOutput({ message: 'Wallet connected', account: connectedAccount });
+                writeAsaOutput({
+                    message: 'Wallet connected',
+                    account: connectedAccount,
+                    chainId: PERA_CHAIN_ID,
+                });
             } catch (err) {
+                if (err?.data?.type === 'CONNECT_MODAL_CLOSED') {
+                    writeAsaOutput('Wallet connect cancelled (modal closed).');
+                    return;
+                }
                 writeAsaOutput(`Wallet connect error: ${err.message}`);
             }
         });
