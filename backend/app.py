@@ -484,8 +484,9 @@ def asa_submit_funding(invoice_id: Union[int, str], req: InvoiceFundingSubmitReq
         if len(req.signed_txns) != 2:
             raise HTTPException(status_code=400, detail="signed_txns must contain exactly 2 signed transactions")
 
-        raw_signed = [_normalize_signed_txn(stxn) for stxn in req.signed_txns]
-        tx_id = algod.send_raw_transaction(raw_signed)
+        raw_signed_b64 = [_normalize_signed_txn(stxn) for stxn in req.signed_txns]
+        grouped_blob = b"".join(base64.b64decode(stxn) for stxn in raw_signed_b64)
+        tx_id = algod.send_raw_transaction(grouped_blob)
         transaction.wait_for_confirmation(algod, tx_id, 4)
 
         updated = update_invoice_funded_record(invoice_id=invoice_id, owner=req.investor, algo_tx_id=tx_id)
