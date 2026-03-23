@@ -1,11 +1,15 @@
 import { PeraWalletConnect } from "@perawallet/connect";
 
+const PERA_CHAIN_ID = 416002;
+const peraWallet = new PeraWalletConnect({
+    chainId: PERA_CHAIN_ID,
+    shouldShowSignTxnToast: true,
+});
+
 document.addEventListener('DOMContentLoaded', () => {
-    const PERA_CHAIN_ID = 416002;
     const deployStatus = document.getElementById('deployStatus');
     const stateOutput = document.getElementById('stateOutput');
     const asaOutput = document.getElementById('asaOutput');
-    let peraWallet = null;
     let connectedAccount = '';
     let pendingTokenizeTxn = '';
     let pendingFundTxns = [];
@@ -41,6 +45,37 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!asaOutput) return;
         asaOutput.textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
     }
+
+    async function reconnectWalletSession() {
+        try {
+            const accounts = await peraWallet.reconnectSession();
+            if (accounts?.length) {
+                connectedAccount = accounts[0];
+                if (deployStatus) {
+                    deployStatus.textContent = `Reconnected: ${connectedAccount}`;
+                }
+                writeAsaOutput({
+                    message: 'Wallet session restored',
+                    account: connectedAccount,
+                    chainId: PERA_CHAIN_ID,
+                });
+            }
+
+            if (peraWallet.connector?.on) {
+                peraWallet.connector.on('disconnect', () => {
+                    connectedAccount = '';
+                    if (deployStatus) {
+                        deployStatus.textContent = 'Wallet disconnected';
+                    }
+                    writeAsaOutput('Wallet disconnected. Please connect again.');
+                });
+            }
+        } catch (error) {
+            console.error('reconnectSession error:', error);
+        }
+    }
+
+    reconnectWalletSession();
 
     async function signGroupWithPera(unsignedTxns, signerAddress, signerIndex) {
         if (!peraWallet) {
@@ -86,9 +121,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnConnectWallet) {
         btnConnectWallet.addEventListener('click', async () => {
             try {
-                if (!peraWallet) {
-                    peraWallet = new PeraWalletConnect({ chainId: PERA_CHAIN_ID });
-                }
+                console.log('Connect button clicked');
 
                 const accounts = await peraWallet.connect();
                 connectedAccount = (accounts && accounts[0]) || '';
