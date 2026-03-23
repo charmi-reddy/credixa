@@ -1,4 +1,14 @@
+import { Buffer } from "buffer";
 import { PeraWalletConnect } from "@perawallet/connect";
+
+if (typeof window !== "undefined") {
+    if (!window.Buffer) {
+        window.Buffer = Buffer;
+    }
+    if (!window.process) {
+        window.process = { env: {} };
+    }
+}
 
 const PERA_CHAIN_ID = 416002;
 const peraWallet = new PeraWalletConnect({
@@ -6,11 +16,13 @@ const peraWallet = new PeraWalletConnect({
     shouldShowSignTxnToast: true,
 });
 
-document.addEventListener('DOMContentLoaded', () => {
+function initCredixaWalletApp() {
     const deployStatus = document.getElementById('deployStatus');
     const stateOutput = document.getElementById('stateOutput');
     const asaOutput = document.getElementById('asaOutput');
-    let connectedAccount = '';
+    let connectedAccounts = [];
+    let primaryAccount = '';
+    let secondaryAccount = '';
     let pendingTokenizeTxn = '';
     let pendingFundTxns = [];
     let signedGroupByInvestor = [];
@@ -46,24 +58,63 @@ document.addEventListener('DOMContentLoaded', () => {
         asaOutput.textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
     }
 
+    function applyConnectedAccounts(accounts) {
+        const selectedAccounts = (accounts || []).slice(0, 2);
+        if (!selectedAccounts.length) {
+            throw new Error('No wallet account selected');
+        }
+
+        connectedAccounts = selectedAccounts;
+        primaryAccount = selectedAccounts[0] || '';
+        secondaryAccount = selectedAccounts[1] || '';
+
+        const supplierInput = document.getElementById('asaSupplier');
+        const investorInput = document.getElementById('asaInvestor');
+        if (supplierInput && primaryAccount) supplierInput.value = primaryAccount;
+        if (investorInput && secondaryAccount) investorInput.value = secondaryAccount;
+
+        return selectedAccounts;
+    }
+
+    if (deployStatus) {
+        deployStatus.textContent = 'Frontend loaded. Click Connect/Switch Pera Wallet.';
+    }
+
+    window.addEventListener('error', (event) => {
+        writeAsaOutput(`Runtime error: ${event.message}`);
+    });
+
     async function reconnectWalletSession() {
         try {
             const accounts = await peraWallet.reconnectSession();
             if (accounts?.length) {
-                connectedAccount = accounts[0];
+                if (accounts.length > 2) {
+                    await peraWallet.disconnect();
+                    connectedAccounts = [];
+                    primaryAccount = '';
+                    secondaryAccount = '';
+                    writeAsaOutput('Previous session had more than 2 accounts. Disconnected. Please reconnect and select max 2 wallets.');
+                    return;
+                }
+
+                const selectedAccounts = applyConnectedAccounts(accounts);
                 if (deployStatus) {
-                    deployStatus.textContent = `Reconnected: ${connectedAccount}`;
+                    deployStatus.textContent = `Reconnected: ${selectedAccounts[0]}`;
                 }
                 writeAsaOutput({
                     message: 'Wallet session restored',
-                    account: connectedAccount,
+                    primaryAccount,
+                    secondaryAccount: secondaryAccount || null,
+                    selectedAccounts,
                     chainId: PERA_CHAIN_ID,
                 });
             }
 
             if (peraWallet.connector?.on) {
                 peraWallet.connector.on('disconnect', () => {
-                    connectedAccount = '';
+                    connectedAccounts = [];
+                    primaryAccount = '';
+                    secondaryAccount = '';
                     if (deployStatus) {
                         deployStatus.textContent = 'Wallet disconnected';
                     }
@@ -77,12 +128,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     reconnectWalletSession();
 
+    async function forceNewConnection() {
+        const existingAccounts = await peraWallet.reconnectSession();
+        if (existingAccounts?.length) {
+            await peraWallet.disconnect();
+        }
+        return peraWallet.connect();
+    }
+
     async function signGroupWithPera(unsignedTxns, signerAddress, signerIndex) {
         if (!peraWallet) {
             throw new Error('Pera Wallet is not connected');
         }
-        if (!connectedAccount || connectedAccount !== signerAddress) {
-            throw new Error(`Connect wallet as signer: ${signerAddress}`);
+        if (!signerAddress || !connectedAccounts.includes(signerAddress)) {
+            throw new Error(`Signer address is not in connected wallets: ${signerAddress}`);
         }
 
         const txnsToSign = unsignedTxns.map((txn, idx) => ({
@@ -122,16 +181,25 @@ document.addEventListener('DOMContentLoaded', () => {
         btnConnectWallet.addEventListener('click', async () => {
             try {
                 console.log('Connect button clicked');
+                writeAsaOutput('Connect button clicked... opening wallet modal');
 
-                const accounts = await peraWallet.connect();
-                connectedAccount = (accounts && accounts[0]) || '';
-                if (!connectedAccount) {
-                    throw new Error('Wallet connected but no account was returned');
+                const accounts = await forceNewConnection();
+                if ((accounts || []).length > 2) {
+                    await peraWallet.disconnect();
+                    throw new Error('Please select only 1 or 2 accounts maximum');
                 }
-                deployStatus.textContent = `Connected: ${connectedAccount}`;
+
+                const selectedAccounts = applyConnectedAccounts(accounts);
+                deployStatus.textContent = `Connected: ${selectedAccounts[0]}`;
                 writeAsaOutput({
                     message: 'Wallet connected',
-                    account: connectedAccount,
+                    primaryAccount,
+                    secondaryAccount: secondaryAccount || null,
+                    selectedAccounts,
+                    roleMapping: {
+                        supplier: primaryAccount,
+                        investor: secondaryAccount || 'not selected',
+                    },
                     chainId: PERA_CHAIN_ID,
                 });
             } catch (err) {
@@ -142,6 +210,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 writeAsaOutput(`Wallet connect error: ${err.message}`);
             }
         });
+    }
+    else {
+        writeAsaOutput('UI error: Connect button not found in DOM.');
     }
 
     if (btnPrepareTokenize) {
@@ -168,7 +239,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const invoiceId = parseInt(document.getElementById('asaInvoiceId').value || '0', 10);
                 if (!invoiceId) throw new Error('Invoice ID is required');
                 if (!pendingTokenizeTxn) throw new Error('Prepare tokenize transaction first');
-                if (!peraWallet || !connectedAccount) throw new Error('Connect wallet first');
+                if (!peraWallet || !primaryAccount) throw new Error('Connect wallet first');
 
                 const signed = await peraWallet.signTransaction([[{ txn: pendingTokenizeTxn }]]);
                 const signedTxn = toBase64(Array.isArray(signed) ? signed[0] : signed);
@@ -265,4 +336,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
-});
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initCredixaWalletApp);
+} else {
+    initCredixaWalletApp();
+}
