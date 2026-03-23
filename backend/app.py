@@ -69,7 +69,6 @@ def load_contract_spec():
     artifact_path = os.path.join(base_dir, "backend", "artifacts", "InvoiceFinancing.arc56.json")
     
     print(f"Loading contract spec from: {artifact_path}")
-    sys.stdout.flush()
     
     if not os.path.exists(artifact_path):
         # Fallback if base_dir is already inside backend
