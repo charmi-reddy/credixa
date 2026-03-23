@@ -346,6 +346,17 @@ def _from_base64_signed_txn(signed_txn_b64: str) -> bytes:
         raise HTTPException(status_code=400, detail=f"Invalid signed transaction base64: {e}")
 
 
+def _normalize_signed_txn(signed_txn_b64: str) -> str:
+    candidate = (signed_txn_b64 or "").strip()
+    if not candidate:
+        raise HTTPException(status_code=400, detail="Signed transaction is empty")
+    try:
+        base64.b64decode(candidate)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid signed transaction base64: {e}")
+    return candidate
+
+
 def _account_holds_asset(address: str, asa_id: int) -> bool:
     account_info = algod.account_info(address)
     for asset in account_info.get("assets", []):
@@ -394,8 +405,7 @@ def asa_create_invoice_prepare(req: AsaCreatePrepareReq):
 @app.post("/asa/invoices/create/submit")
 def asa_create_invoice_submit(req: AsaCreateSubmitReq):
     try:
-        raw_stxn = _from_base64_signed_txn(req.signed_txn)
-        tx_id = algod.send_raw_transaction(raw_stxn)
+        tx_id = algod.send_raw_transaction(_normalize_signed_txn(req.signed_txn))
         confirmation = transaction.wait_for_confirmation(algod, tx_id, 4)
         asa_id = int(confirmation.get("asset-index", 0))
         if not asa_id:
@@ -474,7 +484,7 @@ def asa_submit_funding(invoice_id: Union[int, str], req: InvoiceFundingSubmitReq
         if len(req.signed_txns) != 2:
             raise HTTPException(status_code=400, detail="signed_txns must contain exactly 2 signed transactions")
 
-        raw_signed = [_from_base64_signed_txn(stxn) for stxn in req.signed_txns]
+        raw_signed = [_normalize_signed_txn(stxn) for stxn in req.signed_txns]
         tx_id = algod.send_raw_transaction(raw_signed)
         transaction.wait_for_confirmation(algod, tx_id, 4)
 
