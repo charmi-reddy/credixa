@@ -24,6 +24,12 @@ from .db import (
 
 app = FastAPI()
 
+runtime_app_state = {
+    "app_id": 0,
+    "supplier_addr": "",
+    "investor_addr": "",
+}
+
 # Ensure static dir exists
 os.makedirs("backend/static", exist_ok=True)
 app.mount("/static", StaticFiles(directory="backend/static"), name="static")
@@ -32,15 +38,18 @@ app.mount("/static", StaticFiles(directory="backend/static"), name="static")
 class AppState:
     @property
     def app_id(self) -> int:
-        return get_app_state().get("app_id", 0)
+        persisted = get_app_state()
+        return persisted.get("app_id", 0) or runtime_app_state["app_id"]
     
     @property
     def supplier_addr(self) -> str:
-        return get_app_state().get("supplier_addr", "")
+        persisted = get_app_state()
+        return persisted.get("supplier_addr", "") or runtime_app_state["supplier_addr"]
     
     @property
     def investor_addr(self) -> str:
-        return get_app_state().get("investor_addr", "")
+        persisted = get_app_state()
+        return persisted.get("investor_addr", "") or runtime_app_state["investor_addr"]
 
 state = AppState()
 
@@ -89,10 +98,8 @@ def read_root():
 def deploy_contract():
     try:
         supplier = get_signer_account("supplier")
-        state.supplier_addr = supplier.address
         
         investor = get_signer_account("investor")
-        state.investor_addr = investor.address
 
         app_spec = load_contract_spec()
             
@@ -111,6 +118,10 @@ def deploy_contract():
             supplier_addr=supplier.address,
             investor_addr=investor.address
         )
+
+        runtime_app_state["app_id"] = response.app.app_id
+        runtime_app_state["supplier_addr"] = supplier.address
+        runtime_app_state["investor_addr"] = investor.address
         
         return {"message": "Contract deployed", "app_id": response.app.app_id, "supplier": supplier.address, "investor": investor.address}
     except Exception as e:
@@ -147,6 +158,8 @@ def create_invoice(req: InvoiceCreateReq):
         
         app_client.send.call(algokit_utils.AppCallMethodCallParams(
             method="create_invoice",
+            sender=supplier.address,
+            app_id=state.app_id,
             args=[req.amount]
         ))
         return {"message": "Invoice created successfully"}
@@ -170,7 +183,9 @@ def request_financing():
         )
         
         app_client.send.call(algokit_utils.AppCallMethodCallParams(
-            method="request_financing"
+            method="request_financing",
+            sender=supplier.address,
+            app_id=state.app_id,
         ))
         return {"message": "Financing requested successfully"}
     except Exception as e:
@@ -207,6 +222,8 @@ def fund_invoice():
         
         app_client.send.call(algokit_utils.AppCallMethodCallParams(
             method="fund_invoice",
+            sender=investor.address,
+            app_id=state.app_id,
             args=[payment]
         ))
         return {"message": "Invoice funded atomically"}
