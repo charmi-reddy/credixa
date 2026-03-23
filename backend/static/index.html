@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tokenized Invoice Financing</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>Credixa</h1>
+            <p>Tokenized Invoice Financing & Settlement</p>
+        </header>
+
+        <main>
+            <div class="card">
+                <h2>1. Setup environment</h2>
+                <button id="btnDeploy" class="btn primary">Deploy Contract</button>
+                <div id="deployStatus" class="status-box"></div>
+            </div>
+
+            <div class="card">
+                <h2>2. Supplier: Create Invoice</h2>
+                <div class="input-group">
+                    <label>Amount (microAlgos):</label>
+                    <input type="number" id="invoiceAmount" value="1000000">
+                </div>
+                <button id="btnCreate" class="btn primary">Create Invoice</button>
+
+                <h2 style="margin-top: 20px;">3. Supplier: Request Financing</h2>
+                <button id="btnRequestFinancing" class="btn secondary">Mark Available for Funding</button>
+            </div>
+
+            <div class="card">
+                <h2>4. Investor: Fund Invoice</h2>
+                <p>Funds will be atomically transferred to the supplier and ownership of the invoice will be updated.
+                </p>
+                <button id="btnFund" class="btn accent">Fund Atomically</button>
+            </div>
+
+            <div class="card dark">
+                <h2>Contract State</h2>
+                <button id="btnRefresh" class="btn small">Refresh State</button>
+                <pre id="stateOutput">No contract deployed yet.</pre>
+            </div>
+        </main>
+    </div>
+    <script src="/static/app.js"></script>
+</body>
+
+</html>

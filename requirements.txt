@@ -1,0 +1,8 @@
+algorand-python
+algokit-utils==4.2.3
+fastapi
+uvicorn
+pydantic
+python-dotenv
+typing-extensions
+py-algorand-sdk

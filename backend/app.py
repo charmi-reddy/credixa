@@ -1,0 +1,202 @@
+from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+from pydantic import BaseModel
+import json
+import os
+import sys
+import traceback
+
+import algokit_utils
+from algokit_utils import AlgorandClient
+from algokit_utils.applications import Arc56Contract
+
+app = FastAPI()
+
+# Ensure static dir exists
+os.makedirs("backend/static", exist_ok=True)
+app.mount("/static", StaticFiles(directory="backend/static"), name="static")
+
+# State to hold app ID of the deployed contract
+class AppState:
+    app_id: int = 0
+    supplier_addr: str = ""
+    investor_addr: str = ""
+
+state = AppState()
+
+# Algorand Client
+algorand = AlgorandClient.default_localnet()
+
+def get_signer_account(name: str):
+    print(f"Getting account for: {name}")
+    sys.stdout.flush()
+    try:
+        acc = algorand.account.from_kmd(name)
+        print(f"Got account: {acc.address}")
+        sys.stdout.flush()
+        return acc
+    except Exception as e:
+        print(f"Error getting account {name}: {e}")
+        sys.stdout.flush()
+        raise
+
+def load_contract_spec():
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    # The file is at backend/artifacts/... relative to app.py
+    artifact_path = os.path.join(base_dir, "backend", "artifacts", "InvoiceFinancing.arc56.json")
+    
+    print(f"Loading contract spec from: {artifact_path}")
+    sys.stdout.flush()
+    
+    if not os.path.exists(artifact_path):
+        # Fallback if base_dir is already inside backend
+        alt_path = os.path.join(base_dir, "artifacts", "InvoiceFinancing.arc56.json")
+        if os.path.exists(alt_path):
+            artifact_path = alt_path
+        else:
+            raise Exception(f"Artifact not found at {artifact_path} or {alt_path}")
+
+    with open(artifact_path, "r") as f:
+        content = f.read()
+    
+    return Arc56Contract.from_json(content)
+
+@app.get("/")
+def read_root():
+    return FileResponse("backend/static/index.html")
+
+@app.post("/deploy")
+def deploy_contract():
+    try:
+        supplier = get_signer_account("supplier")
+        state.supplier_addr = supplier.address
+        
+        investor = get_signer_account("investor")
+        state.investor_addr = investor.address
+
+        app_spec = load_contract_spec()
+            
+        # Deploy using AppFactory
+        factory = algorand.client.get_app_factory(
+            app_spec=app_spec,
+            default_sender=supplier.address
+        )
+        
+        # In Algokit 4.x, factory.deploy() returns a tuple: (AppClient, AppFactoryDeployResult)
+        _, response = factory.deploy()
+        state.app_id = response.app.app_id
+        
+        return {"message": "Contract deployed", "app_id": state.app_id, "supplier": state.supplier_addr, "investor": state.investor_addr}
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+class InvoiceCreateReq(BaseModel):
+    amount: int  # microAlgos
+
+@app.post("/create_invoice")
+def create_invoice(req: InvoiceCreateReq):
+    try:
+        if not state.app_id:
+            raise Exception("Contract not deployed")
+
+        supplier = get_signer_account("supplier")
+        app_spec = load_contract_spec()
+            
+        app_client = algorand.client.get_app_client_by_id(
+            app_spec=app_spec,
+            app_id=state.app_id,
+            default_sender=supplier.address
+        )
+        
+        app_client.send.call(algokit_utils.AppCallMethodCallParams(
+            method="create_invoice",
+            args=[req.amount]
+        ))
+        return {"message": "Invoice created successfully"}
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/request_financing")
+def request_financing():
+    try:
+        if not state.app_id:
+            raise Exception("Contract not deployed")
+
+        supplier = get_signer_account("supplier")
+        app_spec = load_contract_spec()
+            
+        app_client = algorand.client.get_app_client_by_id(
+            app_spec=app_spec,
+            app_id=state.app_id,
+            default_sender=supplier.address
+        )
+        
+        app_client.send.call(algokit_utils.AppCallMethodCallParams(
+            method="request_financing"
+        ))
+        return {"message": "Financing requested successfully"}
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/fund_invoice")
+def fund_invoice():
+    try:
+        if not state.app_id:
+            raise Exception("Contract not deployed")
+
+        investor = get_signer_account("investor")
+        app_spec = load_contract_spec()
+            
+        app_client = algorand.client.get_app_client_by_id(
+            app_spec=app_spec,
+            app_id=state.app_id,
+            default_sender=investor.address
+        )
+        
+        # Read state to get the amount
+        gs = app_client.get_global_state()
+        amount = gs.get("amount").value if "amount" in gs else 0
+        
+        # Create payment txn
+        payment = algorand.create_transaction.payment(
+            algokit_utils.PaymentParams(
+                sender=investor.address,
+                receiver=state.supplier_addr,
+                amount=amount
+            )
+        )
+        
+        app_client.send.call(algokit_utils.AppCallMethodCallParams(
+            method="fund_invoice",
+            args=[payment]
+        ))
+        return {"message": "Invoice funded atomically"}
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/status")
+def get_status():
+    if not state.app_id:
+        return {"status": "Not Deployed"}
+        
+    try:
+        app_spec = load_contract_spec()
+        app_client = algorand.client.get_app_client_by_id(
+            app_spec=app_spec,
+            app_id=state.app_id
+        )
+        gs = app_client.get_global_state()
+        # Convert AppState objects to their actual values for JSON serialization
+        return {k: v.value for k, v in gs.items()}
+    except Exception as e:
+        traceback.print_exc()
+        return {"error": str(e)}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

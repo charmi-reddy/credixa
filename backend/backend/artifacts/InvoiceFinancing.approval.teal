@@ -1,0 +1,217 @@
+#pragma version 11
+#pragma typetrack false
+
+// algopy.arc4.ARC4Contract.approval_program() -> uint64:
+main:
+    intcblock 0 1
+    bytecblock "status" "owner" "amount" "Created" "Available" "Funded"
+    txn ApplicationID
+    bnz main_after_if_else@2
+    // backend/smart_contract.py:6
+    // self.owner = algopy.Account()
+    bytec_1 // "owner"
+    global ZeroAddress
+    app_global_put
+    // backend/smart_contract.py:7
+    // self.amount = UInt64(0)
+    bytec_2 // "amount"
+    intc_0 // 0
+    app_global_put
+    // backend/smart_contract.py:8
+    // self.status = String("Created")
+    bytec_0 // "status"
+    bytec_3 // "Created"
+    app_global_put
+
+main_after_if_else@2:
+    // backend/smart_contract.py:4
+    // class InvoiceFinancing(ARC4Contract):
+    txn NumAppArgs
+    bz main___algopy_default_create@13
+    txn OnCompletion
+    !
+    assert
+    txn ApplicationID
+    assert
+    pushbytess 0x7ce8f202 0x87513103 0xceb3f6fc 0x95c774e4 // method "create_invoice(uint64)void", method "request_financing()void", method "fund_invoice(pay)void", method "settle_invoice(pay)void"
+    txna ApplicationArgs 0
+    match create_invoice request_financing fund_invoice settle_invoice
+    err
+
+main___algopy_default_create@13:
+    txn OnCompletion
+    !
+    txn ApplicationID
+    !
+    &&
+    return
+
+
+// smart_contract.InvoiceFinancing.create_invoice[routing]() -> void:
+create_invoice:
+    // backend/smart_contract.py:10
+    // @algopy.arc4.abimethod()
+    txna ApplicationArgs 1
+    dup
+    len
+    pushint 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    btoi
+    // backend/smart_contract.py:12
+    // self.owner = Txn.sender
+    bytec_1 // "owner"
+    txn Sender
+    app_global_put
+    // backend/smart_contract.py:13
+    // self.amount = amount
+    bytec_2 // "amount"
+    swap
+    app_global_put
+    // backend/smart_contract.py:14
+    // self.status = String("Created")
+    bytec_0 // "status"
+    bytec_3 // "Created"
+    app_global_put
+    // backend/smart_contract.py:10
+    // @algopy.arc4.abimethod()
+    intc_1 // 1
+    return
+
+
+// smart_contract.InvoiceFinancing.request_financing[routing]() -> void:
+request_financing:
+    // backend/smart_contract.py:18
+    // assert Txn.sender == self.owner, "Only owner can request financing"
+    txn Sender
+    intc_0 // 0
+    bytec_1 // "owner"
+    app_global_get_ex
+    assert // check self.owner exists
+    ==
+    assert // Only owner can request financing
+    // backend/smart_contract.py:19
+    // assert self.status == String("Created"), "Invoice must be in Created state"
+    intc_0 // 0
+    bytec_0 // "status"
+    app_global_get_ex
+    assert // check self.status exists
+    bytec_3 // "Created"
+    ==
+    assert // Invoice must be in Created state
+    // backend/smart_contract.py:20
+    // self.status = String("Available")
+    bytec_0 // "status"
+    bytec 4 // "Available"
+    app_global_put
+    // backend/smart_contract.py:16
+    // @algopy.arc4.abimethod()
+    intc_1 // 1
+    return
+
+
+// smart_contract.InvoiceFinancing.fund_invoice[routing]() -> void:
+fund_invoice:
+    // backend/smart_contract.py:22
+    // @algopy.arc4.abimethod()
+    txn GroupIndex
+    intc_1 // 1
+    -
+    dup
+    gtxns TypeEnum
+    intc_1 // pay
+    ==
+    assert // transaction type is pay
+    // backend/smart_contract.py:24
+    // assert self.status == String("Available"), "Invoice not available for funding"
+    intc_0 // 0
+    bytec_0 // "status"
+    app_global_get_ex
+    assert // check self.status exists
+    bytec 4 // "Available"
+    ==
+    assert // Invoice not available for funding
+    // backend/smart_contract.py:25
+    // assert payment.receiver == self.owner, "Payment must be to the current owner"
+    dup
+    gtxns Receiver
+    intc_0 // 0
+    bytec_1 // "owner"
+    app_global_get_ex
+    assert // check self.owner exists
+    ==
+    assert // Payment must be to the current owner
+    // backend/smart_contract.py:26
+    // assert payment.amount == self.amount, "Payment amount must match invoice amount"
+    gtxns Amount
+    intc_0 // 0
+    bytec_2 // "amount"
+    app_global_get_ex
+    assert // check self.amount exists
+    ==
+    assert // Payment amount must match invoice amount
+    // backend/smart_contract.py:28
+    // self.owner = Txn.sender
+    bytec_1 // "owner"
+    txn Sender
+    app_global_put
+    // backend/smart_contract.py:29
+    // self.status = String("Funded")
+    bytec_0 // "status"
+    bytec 5 // "Funded"
+    app_global_put
+    // backend/smart_contract.py:22
+    // @algopy.arc4.abimethod()
+    intc_1 // 1
+    return
+
+
+// smart_contract.InvoiceFinancing.settle_invoice[routing]() -> void:
+settle_invoice:
+    // backend/smart_contract.py:31
+    // @algopy.arc4.abimethod()
+    txn GroupIndex
+    intc_1 // 1
+    -
+    dup
+    gtxns TypeEnum
+    intc_1 // pay
+    ==
+    assert // transaction type is pay
+    // backend/smart_contract.py:33
+    // assert self.status == String("Funded"), "Invoice must be Funded to be settled"
+    intc_0 // 0
+    bytec_0 // "status"
+    app_global_get_ex
+    assert // check self.status exists
+    bytec 5 // "Funded"
+    ==
+    assert // Invoice must be Funded to be settled
+    // backend/smart_contract.py:34
+    // assert payment.receiver == self.owner, "Payment must be to the current owner (investor)"
+    dup
+    gtxns Receiver
+    intc_0 // 0
+    bytec_1 // "owner"
+    app_global_get_ex
+    assert // check self.owner exists
+    ==
+    assert // Payment must be to the current owner (investor)
+    // backend/smart_contract.py:35
+    // assert payment.amount == self.amount, "Payment amount must match invoice amount"
+    gtxns Amount
+    intc_0 // 0
+    bytec_2 // "amount"
+    app_global_get_ex
+    assert // check self.amount exists
+    ==
+    assert // Payment amount must match invoice amount
+    // backend/smart_contract.py:37
+    // self.status = String("Settled")
+    bytec_0 // "status"
+    pushbytes "Settled"
+    app_global_put
+    // backend/smart_contract.py:31
+    // @algopy.arc4.abimethod()
+    intc_1 // 1
+    return
