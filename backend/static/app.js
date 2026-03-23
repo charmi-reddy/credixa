@@ -11,6 +11,45 @@ document.addEventListener('DOMContentLoaded', () => {
     let signedGroupByInvestor = [];
     let signedGroupBySupplier = [];
 
+    function resolveWalletCtor() {
+        const sdk = window.PeraWalletConnect;
+        if (typeof sdk === 'function') return sdk;
+        if (sdk && typeof sdk.PeraWalletConnect === 'function') return sdk.PeraWalletConnect;
+        if (window.perawallet && typeof window.perawallet.PeraWalletConnect === 'function') return window.perawallet.PeraWalletConnect;
+        return null;
+    }
+
+    function loadScript(src) {
+        return new Promise((resolve, reject) => {
+            const existing = Array.from(document.querySelectorAll('script')).find(s => s.src && s.src.includes(src));
+            if (existing) {
+                resolve();
+                return;
+            }
+            const script = document.createElement('script');
+            script.src = src;
+            script.async = false;
+            script.onload = () => resolve();
+            script.onerror = () => reject(new Error(`Failed to load script: ${src}`));
+            document.head.appendChild(script);
+        });
+    }
+
+    async function ensurePeraSdkLoaded() {
+        if (resolveWalletCtor()) return;
+
+        try {
+            await loadScript('/static/pera-wallet.bundle.js?v=2');
+        } catch (_) {
+        }
+        if (resolveWalletCtor()) return;
+
+        await loadScript('https://cdn.jsdelivr.net/npm/@perawallet/connect/dist/index.min.js');
+        if (!resolveWalletCtor()) {
+            throw new Error('Pera Wallet SDK loaded but constructor not found');
+        }
+    }
+
     async function req(url, method = 'GET', body = null) {
         const options = { method, headers: { 'Content-Type': 'application/json' } };
         if (body) options.body = JSON.stringify(body);
@@ -114,20 +153,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnConnectWallet) {
         btnConnectWallet.addEventListener('click', async () => {
             try {
+                await ensurePeraSdkLoaded();
                 if (!peraWallet) {
-                    const sdk = window.PeraWalletConnect;
-                    let WalletCtor = null;
-
-                    if (typeof sdk === 'function') {
-                        WalletCtor = sdk;
-                    } else if (sdk && typeof sdk.PeraWalletConnect === 'function') {
-                        WalletCtor = sdk.PeraWalletConnect;
-                    } else if (window.perawallet && typeof window.perawallet.PeraWalletConnect === 'function') {
-                        WalletCtor = window.perawallet.PeraWalletConnect;
-                    }
+                    const WalletCtor = resolveWalletCtor();
 
                     if (!WalletCtor) {
-                        throw new Error('Pera Wallet SDK not loaded. Refresh page once and try again.');
+                        throw new Error('Pera Wallet SDK not loaded. Please hard refresh and try again.');
                     }
 
                     peraWallet = new WalletCtor({ chainId: PERA_CHAIN_ID });
