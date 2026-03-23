@@ -209,14 +209,16 @@ def fund_invoice():
         
         # Read state to get the amount
         gs = app_client.get_global_state()
-        amount = gs.get("amount").value if "amount" in gs else 0
+        amount_micro_algo = int(gs.get("amount").value) if "amount" in gs else 0
+        if amount_micro_algo <= 0:
+            raise Exception("Invalid invoice amount in global state")
         
         # Create payment txn
         payment = algorand.create_transaction.payment(
             algokit_utils.PaymentParams(
                 sender=investor.address,
                 receiver=state.supplier_addr,
-                amount=amount
+                amount=algokit_utils.AlgoAmount.from_micro_algo(amount_micro_algo)
             )
         )
         
