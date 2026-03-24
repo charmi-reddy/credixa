@@ -1,68 +1,41 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tokenized Invoice Financing</title>
+    <title>Credixa</title>
     <link rel="stylesheet" href="/static/styles.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
+<body data-page="landing">
+    <div class="page-shell">
+        <div class="bg-orb bg-orb-a"></div>
+        <div class="bg-orb bg-orb-b"></div>
+        <div class="container">
+            <header class="hero">
+                <div class="hero-badge">Three Role Flow</div>
+                <h1>Credixa</h1>
+                <p>Choose whether you are the Supplier, Investor, or Buyer. Each role has its own login page and separate workspace.</p>
+            </header>
 
-<body>
-    <div class="container">
-        <header>
-            <h1>Credixa</h1>
-            <p>Tokenized Invoice Financing & Settlement</p>
-        </header>
-
-        <main>
-            <div class="card">
-                <h2>1. Connect Wallet (Start Here)</h2>
-                <button id="btnConnectWallet" class="btn secondary">Connect/Switch Pera Wallet</button>
-                <div id="deployStatus" class="status-box">Pera uses Testnet (chainId 416002). Wallet network and backend network must match.</div>
-            </div>
-
-            <div class="card">
-                <h2>2. Create & Tokenize Invoice (Supplier)</h2>
-                <div class="input-group">
-                    <label>Supplier Address:</label>
-                    <input type="text" id="asaSupplier" placeholder="Supplier wallet address">
-                </div>
-                <div class="input-group">
-                    <label>Amount (microAlgos):</label>
-                    <input type="number" id="asaAmount" value="1000000">
-                </div>
-                <button id="btnPrepareTokenize" class="btn primary">Prepare Tokenize Txn</button>
-                <button id="btnSignSubmitTokenize" class="btn accent">Wallet Sign + Submit Tokenize</button>
-            </div>
-
-            <div class="card">
-                <h2>3. Fund Invoice Atomically</h2>
-                <div class="input-group">
-                    <label>Investor Address:</label>
-                    <input type="text" id="asaInvestor" placeholder="Investor wallet address">
-                </div>
-                <div class="input-group">
-                    <label>Invoice ID:</label>
-                    <input type="number" id="asaInvoiceId" placeholder="Created invoice id">
-                </div>
-                <button id="btnPrepareFund" class="btn primary">Prepare Funding Group</button>
-                <button id="btnSignInvestor" class="btn secondary">Wallet Sign as Investor</button>
-                <button id="btnSignSupplier" class="btn secondary">Wallet Sign as Supplier</button>
-                <button id="btnSubmitFund" class="btn accent">Submit Wallet-Signed Group</button>
-            </div>
-
-            <div class="card dark">
-                <h2>4. Verify & Output</h2>
-                <button id="btnVerifyAsa" class="btn small">Verify ASA Ownership</button>
-                <pre id="asaOutput">ASA flow output will appear here.</pre>
-                <button id="btnRefresh" class="btn small">Refresh Legacy Status</button>
-                <pre id="stateOutput">Legacy status output (optional).</pre>
-            </div>
-        </main>
+            <main class="role-grid">
+                <a class="card role-card-link" href="/supplier/login">
+                    <div class="role-kicker">Supplier</div>
+                    <h2>Needs Money</h2>
+                    <p>Create invoices for buyers and request early funding.</p>
+                </a>
+                <a class="card role-card-link" href="/investor/login">
+                    <div class="role-kicker">Investor</div>
+                    <h2>Funds Discounted Invoices</h2>
+                    <p>Provide a lower upfront amount and hold the invoice until buyer repayment.</p>
+                </a>
+                <a class="card role-card-link" href="/buyer/login">
+                    <div class="role-kicker">Buyer</div>
+                    <h2>Pays Later</h2>
+                    <p>Track invoices assigned to you and see what is owed after funding.</p>
+                </a>
+            </main>
+        </div>
     </div>
-    <script src="/static/app.bundle.js"></script>
 </body>
-
 </html>

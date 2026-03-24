@@ -53,3 +53,10 @@ backup.txt
 
 # Test files (optional, uncomment if needed)
 # test_*.py
+
+run.txt
+
+uvicorn.err.log
+uvicorn.out.log
+
+wallet_config.py

@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Supplier Dashboard</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body data-page="supplier-dashboard">
+    <div class="page-shell">
+        <div class="container">
+            <section class="card overview-card">
+                <div class="workspace-head">
+                    <div>
+                        <div class="role-kicker">Supplier</div>
+                        <h1 class="subpage-title">Supplier Dashboard</h1>
+                        <p id="welcomeText" class="card-copy">Create invoices for buyers and receive early funding from investors.</p>
+                    </div>
+                    <button id="btnLogout" class="btn ghost compact">Logout</button>
+                </div>
+                <div class="wallet-grid">
+                    <div class="wallet-tile">
+                        <div class="wallet-label">Supplier Wallet</div>
+                        <div id="supplierWalletStatus" class="wallet-value">Loading wallet...</div>
+                        <div id="supplierBalance" class="wallet-meta">0 microAlgos</div>
+                    </div>
+                    <div class="wallet-tile">
+                        <div class="wallet-label">Investor Wallet</div>
+                        <div id="investorWalletStatus" class="wallet-value">Loading wallet...</div>
+                        <div id="investorBalance" class="wallet-meta">0 microAlgos</div>
+                    </div>
+                </div>
+            </section>
+            <section class="card">
+                <h2>Create Invoice</h2>
+                <div class="input-group">
+                    <label for="buyerIdForInvoice">Buyer ID</label>
+                    <input id="buyerIdForInvoice" type="text" placeholder="Enter buyer ID responsible for repayment">
+                </div>
+                <div class="input-group">
+                    <label for="asaAmount">Invoice Amount (microAlgos)</label>
+                    <input id="asaAmount" type="number" value="1000000">
+                </div>
+                <button id="btnCreateInvoice" class="btn primary">Create Invoice</button>
+            </section>
+            <section class="section-head">
+                <div>
+                    <h2>Your Invoices</h2>
+                    <p class="card-copy">Created invoices show buyer details, face amount, and discounted funding terms.</p>
+                </div>
+                <button id="btnRefresh" class="btn ghost compact">Refresh</button>
+            </section>
+            <section id="invoiceGrid" class="invoice-grid"></section>
+            <div id="emptyInvoices" class="card empty-state hidden">No supplier invoices yet.</div>
+        </div>
+    </div>
+    <div id="popup" class="popup hidden"><div class="popup-card"><div id="popupTag" class="popup-tag">Action</div><h3 id="popupTitle">Title</h3><p id="popupMessage">Message</p><button id="btnClosePopup" class="btn primary">Close</button></div></div>
+    <script src="/static/app.bundle.js"></script>
+</body>
+</html>

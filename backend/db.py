@@ -14,6 +14,9 @@ supabase: Client = None
 if url and key and url != "your_supabase_url":
     supabase = create_client(url, key)
 
+_memory_invoices: list[dict[str, Any]] = []
+_memory_next_invoice_id = 1
+
 
 def is_supabase_configured() -> bool:
     return supabase is not None
@@ -47,7 +50,7 @@ def _execute_schema_sql(sql: str) -> bool:
 
 def ensure_invoices_table() -> bool:
     if not supabase:
-        raise RuntimeError("Supabase client is not configured. Set SUPABASE_URL and SUPABASE_KEY.")
+        return False
 
     try:
         supabase.table("invoices").select("id").limit(1).execute()
@@ -127,7 +130,11 @@ def update_app_state(app_id: int = None, supplier_addr: str = None, investor_add
 
 def test_supabase_connection() -> dict[str, Any]:
     if not supabase:
-        raise RuntimeError("Supabase client is not configured. Set SUPABASE_URL and SUPABASE_KEY.")
+        return {
+            "ok": True,
+            "mode": "memory",
+            "rows": fetch_all_invoices(),
+        }
 
     ensure_invoices_table()
     response = supabase.table("invoices").select("*").limit(5).execute()
@@ -144,6 +151,21 @@ def create_invoice_record(
     asa_id: int | None = None,
     algo_tx_id: str | None = None,
 ) -> dict[str, Any]:
+    global _memory_next_invoice_id
+
+    if not supabase:
+        record = {
+            "id": _memory_next_invoice_id,
+            "amount": amount,
+            "owner": owner,
+            "status": status,
+            "asa_id": asa_id,
+            "algo_tx_id": algo_tx_id,
+        }
+        _memory_invoices.append(record)
+        _memory_next_invoice_id += 1
+        return record.copy()
+
     ensure_invoices_table()
     payload = {
         "amount": amount,
@@ -161,12 +183,20 @@ def create_invoice_record(
 
 
 def fetch_all_invoices() -> list[dict[str, Any]]:
+    if not supabase:
+        return [invoice.copy() for invoice in _memory_invoices]
+
     ensure_invoices_table()
     response = supabase.table("invoices").select("*").order("id", desc=False).execute()
     return response.data or []
 
 
 def update_invoice_status_record(invoice_id: Any, status: str) -> dict[str, Any]:
+    if not supabase:
+        invoice = fetch_invoice_by_id(invoice_id)
+        invoice["status"] = status
+        return invoice
+
     ensure_invoices_table()
     response = supabase.table("invoices").update({"status": status}).eq("id", invoice_id).execute()
     if not response.data:
@@ -175,6 +205,12 @@ def update_invoice_status_record(invoice_id: Any, status: str) -> dict[str, Any]
 
 
 def fetch_invoice_by_id(invoice_id: Any) -> dict[str, Any]:
+    if not supabase:
+        for invoice in _memory_invoices:
+            if str(invoice["id"]) == str(invoice_id):
+                return invoice
+        raise RuntimeError(f"Invoice {invoice_id} not found")
+
     ensure_invoices_table()
     response = supabase.table("invoices").select("*").eq("id", invoice_id).limit(1).execute()
     if not response.data:
@@ -183,6 +219,12 @@ def fetch_invoice_by_id(invoice_id: Any) -> dict[str, Any]:
 
 
 def update_invoice_asa_record(invoice_id: Any, asa_id: int, status: str = "TOKENIZED") -> dict[str, Any]:
+    if not supabase:
+        invoice = fetch_invoice_by_id(invoice_id)
+        invoice["asa_id"] = asa_id
+        invoice["status"] = status
+        return invoice
+
     ensure_invoices_table()
     response = (
         supabase.table("invoices")
@@ -196,6 +238,13 @@ def update_invoice_asa_record(invoice_id: Any, asa_id: int, status: str = "TOKEN
 
 
 def update_invoice_funded_record(invoice_id: Any, owner: str, algo_tx_id: str) -> dict[str, Any]:
+    if not supabase:
+        invoice = fetch_invoice_by_id(invoice_id)
+        invoice["owner"] = owner
+        invoice["status"] = "FUNDED"
+        invoice["algo_tx_id"] = algo_tx_id
+        return invoice
+
     ensure_invoices_table()
     response = (
         supabase.table("invoices")
@@ -206,6 +255,20 @@ def update_invoice_funded_record(invoice_id: Any, owner: str, algo_tx_id: str) -
     if not response.data:
         raise RuntimeError(f"Invoice {invoice_id} not found")
     return response.data[0]
+
+
+def reset_all_invoices() -> None:
+    global _memory_invoices, _memory_next_invoice_id
+
+    if not supabase:
+        _memory_invoices = []
+        _memory_next_invoice_id = 1
+        return
+
+    ensure_invoices_table()
+    truncated = _execute_schema_sql("truncate table public.invoices restart identity;")
+    if not truncated:
+        supabase.table("invoices").delete().neq("id", 0).execute()
 
 
 def insert_sample_invoice() -> dict[str, Any]:

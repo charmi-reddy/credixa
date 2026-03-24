@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Supplier Login</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body data-page="supplier-login">
+    <div class="page-shell">
+        <div class="container narrow">
+            <a class="back-link" href="/">Back to role selection</a>
+            <section class="card auth-card">
+                <div class="role-kicker">Supplier</div>
+                <h1 class="subpage-title">Supplier Login</h1>
+                <p class="card-copy">The supplier is the person who needs money now and creates invoices against buyers.</p>
+                <div class="helper-box">Default login: ID `supplier`, Password `1234`</div>
+                <div class="input-group">
+                    <label for="supplierUserId">Supplier ID</label>
+                    <input id="supplierUserId" type="text" placeholder="supplier">
+                </div>
+                <div class="input-group">
+                    <label for="supplierPassword">Password</label>
+                    <input id="supplierPassword" type="password" placeholder="1234">
+                </div>
+                <button id="btnSupplierLogin" class="btn primary">Login as Supplier</button>
+            </section>
+        </div>
+    </div>
+    <div id="popup" class="popup hidden"><div class="popup-card"><div id="popupTag" class="popup-tag">Login</div><h3 id="popupTitle">Title</h3><p id="popupMessage">Message</p><button id="btnClosePopup" class="btn primary">Close</button></div></div>
+    <script src="/static/app.bundle.js"></script>
+</body>
+</html>
