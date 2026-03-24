@@ -8,6 +8,7 @@ import traceback
 
 from algosdk.v2client.algod import AlgodClient
 from .wallet_config import (
+    BUYER_WALLET,
     INVESTOR_STARTING_BALANCE,
     INVESTOR_WALLET,
     SUPPLIER_STARTING_BALANCE,
@@ -79,6 +80,7 @@ buyer_accounts = {
         "buyer_id": "1234",
         "password": "1234",
         "balance": 20000000,
+        "wallet": BUYER_WALLET,
     }
 }
 
@@ -104,6 +106,7 @@ def wallet_snapshot() -> dict:
     return {
         "supplier": wallet_state["supplier"]["address"],
         "investor": wallet_state["investor"]["address"],
+        "buyer": BUYER_WALLET,
         "connected": True,
         "balances": {
             "supplier": wallet_state["supplier"]["balance"],
@@ -181,7 +184,7 @@ def buyer_login(req: BuyerAuthReq):
     return {
         "role": "buyer",
         "buyer_id": buyer_id,
-        "wallet": SUPPLIER_WALLET,
+        "wallet": account.get("wallet", BUYER_WALLET),
         "connected": True,
     }
 
@@ -194,6 +197,27 @@ def supplier_login(req: RoleAuthReq):
     if not account or account["password"] != password:
         raise HTTPException(status_code=401, detail="Invalid supplier ID or password")
 
+    return {
+        "role": "supplier",
+        "user_id": user_id,
+        "wallet": SUPPLIER_WALLET,
+        "connected": True,
+    }
+
+
+@app.post("/auth/supplier/register")
+def supplier_register(req: RoleAuthReq):
+    user_id = req.user_id.strip()
+    password = req.password.strip()
+    if not user_id or not password:
+        raise HTTPException(status_code=400, detail="Supplier ID and password are required")
+    if user_id in supplier_accounts:
+        raise HTTPException(status_code=409, detail="Supplier ID already exists")
+
+    supplier_accounts[user_id] = {
+        "user_id": user_id,
+        "password": password,
+    }
     return {
         "role": "supplier",
         "user_id": user_id,
@@ -218,6 +242,27 @@ def investor_login(req: RoleAuthReq):
     }
 
 
+@app.post("/auth/investor/register")
+def investor_register(req: RoleAuthReq):
+    user_id = req.user_id.strip()
+    password = req.password.strip()
+    if not user_id or not password:
+        raise HTTPException(status_code=400, detail="Investor ID and password are required")
+    if user_id in investor_accounts:
+        raise HTTPException(status_code=409, detail="Investor ID already exists")
+
+    investor_accounts[user_id] = {
+        "user_id": user_id,
+        "password": password,
+    }
+    return {
+        "role": "investor",
+        "user_id": user_id,
+        "wallet": INVESTOR_WALLET,
+        "connected": True,
+    }
+
+
 @app.post("/auth/buyer/register")
 def buyer_register(req: BuyerAuthReq):
     buyer_id = req.buyer_id.strip()
@@ -231,11 +276,12 @@ def buyer_register(req: BuyerAuthReq):
         "buyer_id": buyer_id,
         "password": password,
         "balance": 20000000,
+        "wallet": BUYER_WALLET,
     }
     return {
         "role": "buyer",
         "buyer_id": buyer_id,
-        "wallet": SUPPLIER_WALLET,
+        "wallet": BUYER_WALLET,
         "connected": True,
     }
 

@@ -55,16 +55,19 @@
     var _a, _b, _c, _d;
     const supplierWalletStatus = document.getElementById("supplierWalletStatus");
     const investorWalletStatus = document.getElementById("investorWalletStatus");
+    const buyerWalletStatus = document.getElementById("buyerWalletStatus");
     const supplierBalance = document.getElementById("supplierBalance");
     const investorBalance = document.getElementById("investorBalance");
     if (!wallets) return;
     if (supplierWalletStatus) supplierWalletStatus.textContent = `${shortenAddress(wallets.supplier || "")}`;
     if (investorWalletStatus) investorWalletStatus.textContent = `${shortenAddress(wallets.investor || "")}`;
+    if (buyerWalletStatus) buyerWalletStatus.textContent = `${shortenAddress(wallets.buyer || "")}`;
     if (supplierBalance) supplierBalance.textContent = `${(_b = (_a = wallets.balances) == null ? void 0 : _a.supplier) != null ? _b : 0} microAlgos`;
     if (investorBalance) investorBalance.textContent = `${(_d = (_c = wallets.balances) == null ? void 0 : _c.investor) != null ? _d : 0} microAlgos`;
   }
   function invoiceCard(invoice, role) {
     const fundedAmount = invoice.funded_amount != null ? `${Number(invoice.funded_amount).toLocaleString()} microAlgos` : "Not funded yet";
+    const currentHolderLabel = invoice.status === "FUNDED" || invoice.status === "PAID" ? "Investor Wallet" : "Supplier Wallet";
     const investorAction = role === "investor" && invoice.status === "CREATED" ? `<button class="btn accent fund-btn" data-invoice-id="${invoice.id}">Fund This Invoice</button>` : "";
     const buyerAction = role === "buyer" && invoice.status !== "PAID" ? `<button class="btn primary buyer-fund-btn" data-invoice-id="${invoice.id}">Fund Now</button>` : "";
     const actions = investorAction || buyerAction;
@@ -79,8 +82,8 @@
             </div>
             <div class="invoice-meta">
                 <div><span>Buyer ID</span><strong>${invoice.buyer_id || "N/A"}</strong></div>
-                <div><span>Owner</span><strong>${shortenAddress(invoice.owner || "")}</strong></div>
-                <div><span>Supplier Wallet</span><strong>${invoice.owner === "" ? "N/A" : shortenAddress("CSGNQCBEKLMKWYCCUQ3CHG4H6OORBF5DQ5QEY3BWCLF6XKVRTDGEQTQK5E")}</strong></div>
+                <div><span>Current Holder</span><strong>${shortenAddress(invoice.owner || "")}</strong></div>
+                <div><span>${currentHolderLabel}</span><strong>${shortenAddress(invoice.owner || "")}</strong></div>
                 <div><span>Funded Amount</span><strong>${fundedAmount}</strong></div>
                 <div><span>Reference</span><strong>${invoice.algo_tx_id || "Pending"}</strong></div>
                 <div><span>Discount</span><strong>${Math.round((invoice.discount_rate || 0) * 100)}%</strong></div>
@@ -117,7 +120,7 @@
     return { auth, invoices: invoiceRes.invoices || [] };
   }
   document.addEventListener("DOMContentLoaded", () => {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m;
     const page = getPage();
     const popup = popupApi();
     if (page === "supplier-login") {
@@ -135,9 +138,23 @@
           popup.show("Supplier login failed", err.message, "Error");
         }
       });
+      (_b = document.getElementById("btnSupplierRegister")) == null ? void 0 : _b.addEventListener("click", async () => {
+        try {
+          const user_id = document.getElementById("supplierUserId").value.trim();
+          const password = document.getElementById("supplierPassword").value.trim();
+          const data = await req("/auth/supplier/register", "POST", { user_id, password });
+          setAuth("supplier", data);
+          popup.show("Supplier registered", "Redirecting to the supplier dashboard.", "Registration");
+          setTimeout(() => {
+            window.location.href = "/supplier/dashboard";
+          }, 500);
+        } catch (err) {
+          popup.show("Supplier registration failed", err.message, "Error");
+        }
+      });
     }
     if (page === "investor-login") {
-      (_b = document.getElementById("btnInvestorLogin")) == null ? void 0 : _b.addEventListener("click", async () => {
+      (_c = document.getElementById("btnInvestorLogin")) == null ? void 0 : _c.addEventListener("click", async () => {
         try {
           const user_id = document.getElementById("investorUserId").value.trim();
           const password = document.getElementById("investorPassword").value.trim();
@@ -151,9 +168,23 @@
           popup.show("Investor login failed", err.message, "Error");
         }
       });
+      (_d = document.getElementById("btnInvestorRegister")) == null ? void 0 : _d.addEventListener("click", async () => {
+        try {
+          const user_id = document.getElementById("investorUserId").value.trim();
+          const password = document.getElementById("investorPassword").value.trim();
+          const data = await req("/auth/investor/register", "POST", { user_id, password });
+          setAuth("investor", data);
+          popup.show("Investor registered", "Redirecting to the investor dashboard.", "Registration");
+          setTimeout(() => {
+            window.location.href = "/investor/dashboard";
+          }, 500);
+        } catch (err) {
+          popup.show("Investor registration failed", err.message, "Error");
+        }
+      });
     }
     if (page === "buyer-login") {
-      (_c = document.getElementById("btnBuyerLogin")) == null ? void 0 : _c.addEventListener("click", async () => {
+      (_e = document.getElementById("btnBuyerLogin")) == null ? void 0 : _e.addEventListener("click", async () => {
         try {
           const buyer_id = document.getElementById("buyerId").value.trim();
           const password = document.getElementById("buyerPassword").value.trim();
@@ -167,7 +198,7 @@
           popup.show("Buyer login failed", err.message, "Error");
         }
       });
-      (_d = document.getElementById("btnBuyerRegister")) == null ? void 0 : _d.addEventListener("click", async () => {
+      (_f = document.getElementById("btnBuyerRegister")) == null ? void 0 : _f.addEventListener("click", async () => {
         try {
           const buyer_id = document.getElementById("buyerId").value.trim();
           const password = document.getElementById("buyerPassword").value.trim();
@@ -190,24 +221,31 @@
         document.getElementById("welcomeText").textContent = `Logged in as ${auth == null ? void 0 : auth.user_id}. Create invoices for buyers who will pay later.`;
         if (buyerInput && !buyerInput.value) buyerInput.value = "1234";
       };
-      (_e = document.getElementById("btnCreateInvoice")) == null ? void 0 : _e.addEventListener("click", async () => {
+      (_g = document.getElementById("btnCreateInvoice")) == null ? void 0 : _g.addEventListener("click", async () => {
+        const button = document.getElementById("btnCreateInvoice");
+        const progress = document.getElementById("invoiceProgressText");
         try {
           const buyer_id = document.getElementById("buyerIdForInvoice").value.trim();
           const amount = parseInt(document.getElementById("asaAmount").value || "0", 10);
           if (!buyer_id) throw new Error("Buyer ID is required");
           if (!amount || amount <= 0) throw new Error("Amount must be greater than 0");
+          if (button) button.disabled = true;
+          if (progress) progress.classList.remove("hidden");
           const data = await req(`/invoices/create?buyer_id=${encodeURIComponent(buyer_id)}`, "POST", { amount });
           await refresh();
           popup.show("Invoice created", `Invoice #${data.invoice.id} was created for buyer ${buyer_id}.`, "Invoice");
         } catch (err) {
           popup.show("Invoice creation failed", err.message, "Error");
+        } finally {
+          if (button) button.disabled = false;
+          if (progress) progress.classList.add("hidden");
         }
       });
-      (_f = document.getElementById("btnRefresh")) == null ? void 0 : _f.addEventListener("click", async () => {
+      (_h = document.getElementById("btnRefresh")) == null ? void 0 : _h.addEventListener("click", async () => {
         await refresh();
         popup.show("Supplier dashboard refreshed", "The latest supplier invoices have been loaded.", "Refresh");
       });
-      (_g = document.getElementById("btnLogout")) == null ? void 0 : _g.addEventListener("click", () => {
+      (_i = document.getElementById("btnLogout")) == null ? void 0 : _i.addEventListener("click", () => {
         clearAllAuth();
         window.location.href = "/";
       });
@@ -229,11 +267,11 @@
           });
         });
       };
-      (_h = document.getElementById("btnRefresh")) == null ? void 0 : _h.addEventListener("click", async () => {
+      (_j = document.getElementById("btnRefresh")) == null ? void 0 : _j.addEventListener("click", async () => {
         await refresh();
         popup.show("Investor dashboard refreshed", "The latest invoices available for funding have been loaded.", "Refresh");
       });
-      (_i = document.getElementById("btnLogout")) == null ? void 0 : _i.addEventListener("click", () => {
+      (_k = document.getElementById("btnLogout")) == null ? void 0 : _k.addEventListener("click", () => {
         clearAllAuth();
         window.location.href = "/";
       });
@@ -261,11 +299,11 @@
           });
         });
       };
-      (_j = document.getElementById("btnRefresh")) == null ? void 0 : _j.addEventListener("click", async () => {
+      (_l = document.getElementById("btnRefresh")) == null ? void 0 : _l.addEventListener("click", async () => {
         await refresh();
         popup.show("Buyer dashboard refreshed", "Your assigned invoices have been loaded.", "Refresh");
       });
-      (_k = document.getElementById("btnLogout")) == null ? void 0 : _k.addEventListener("click", () => {
+      (_m = document.getElementById("btnLogout")) == null ? void 0 : _m.addEventListener("click", () => {
         clearAllAuth();
         window.location.href = "/";
       });

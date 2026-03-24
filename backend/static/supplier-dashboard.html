@@ -26,6 +26,11 @@
                         <div id="supplierBalance" class="wallet-meta">0 microAlgos</div>
                     </div>
                     <div class="wallet-tile">
+                        <div class="wallet-label">Buyer Wallet</div>
+                        <div id="buyerWalletStatus" class="wallet-value">Loading wallet...</div>
+                        <div class="wallet-meta">Buyer payment account</div>
+                    </div>
+                    <div class="wallet-tile">
                         <div class="wallet-label">Investor Wallet</div>
                         <div id="investorWalletStatus" class="wallet-value">Loading wallet...</div>
                         <div id="investorBalance" class="wallet-meta">0 microAlgos</div>
@@ -42,6 +47,7 @@
                     <label for="asaAmount">Invoice Amount (microAlgos)</label>
                     <input id="asaAmount" type="number" value="1000000">
                 </div>
+                <div id="invoiceProgressText" class="helper-box hidden">Invoice creation in progress.</div>
                 <button id="btnCreateInvoice" class="btn primary">Create Invoice</button>
             </section>
             <section class="section-head">
