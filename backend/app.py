@@ -59,8 +59,8 @@ state = AppState()
 # Algorand Client
 algorand = AlgorandClient.default_localnet()
 algod = AlgodClient(
-    os.getenv("ALGORAND_ALGOD_TOKEN", "a" * 64),
-    os.getenv("ALGORAND_ALGOD_ADDRESS", "http://localhost:4001"),
+    os.getenv("ALGORAND_ALGOD_TOKEN", ""),
+    os.getenv("ALGORAND_ALGOD_ADDRESS", "https://testnet-api.algonode.cloud"),
 )
 
 def load_contract_spec():
@@ -109,12 +109,14 @@ class InvoiceStatusUpdateReq(BaseModel):
 
 
 class AsaCreatePrepareReq(BaseModel):
-    amount: int
-    supplier: str
+    amount: int | None = None
+    supplier: str | None = None
+    supplier_address: str | None = None
+    invoice_id: int | None = None
 
 
 class AsaCreateSubmitReq(BaseModel):
-    invoice_id: int
+    invoice_id: int | None = None
     signed_txn: str
 
 
@@ -149,18 +151,15 @@ def fund_invoice():
 
 @app.get("/status")
 def get_status():
-    if not state.app_id:
-        return {"status": "Not Deployed"}
-        
     try:
-        app_spec = load_contract_spec()
-        app_client = algorand.client.get_app_client_by_id(
-            app_spec=app_spec,
-            app_id=state.app_id
-        )
-        gs = app_client.get_global_state()
-        # Convert AppState objects to their actual values for JSON serialization
-        return {k: v.value for k, v in gs.items()}
+        node_status = algod.status()
+        return {
+            "status": "ok",
+            "network": "testnet",
+            "algod_address": os.getenv("ALGORAND_ALGOD_ADDRESS", "https://testnet-api.algonode.cloud"),
+            "last_round": node_status.get("last-round"),
+            "time_since_last_round": node_status.get("time-since-last-round"),
+        }
     except Exception as e:
         traceback.print_exc()
         return {"error": str(e)}
@@ -293,35 +292,47 @@ def _validate_atomic_funding_group(
 @app.post("/asa/invoices/create/prepare")
 def asa_create_invoice_prepare(req: AsaCreatePrepareReq):
     try:
+        supplier = (req.supplier or req.supplier_address or "").strip()
+        if not supplier:
+            raise HTTPException(status_code=400, detail="supplier (or supplier_address) is required")
+
+        amount = int(req.amount or 1_000_000)
+        if amount <= 0:
+            raise HTTPException(status_code=400, detail="amount must be > 0")
+
         invoice = create_invoice_record(
-            amount=req.amount,
-            owner=req.supplier,
+            amount=amount,
+            owner=supplier,
             status="CREATED",
         )
         invoice_id = int(invoice["id"])
 
         sp = _suggested_params()
         asa_create_txn = transaction.AssetConfigTxn(
-            sender=req.supplier,
+            sender=supplier,
             sp=sp,
             total=1,
             default_frozen=False,
             unit_name="INV",
             asset_name=f"Invoice_{invoice_id}",
-            manager=req.supplier,
-            reserve=req.supplier,
-            freeze=req.supplier,
-            clawback=req.supplier,
+            manager=supplier,
+            reserve=supplier,
+            freeze=supplier,
+            clawback=supplier,
             decimals=0,
         )
 
+        unsigned_txn = _to_base64_txn(asa_create_txn)
         return {
             "message": "Unsigned ASA creation transaction prepared",
             "invoice": invoice,
-            "unsigned_txn": _to_base64_txn(asa_create_txn),
+            "unsigned_txn": unsigned_txn,
+            "txn": unsigned_txn,
             "tx_id": asa_create_txn.get_txid(),
             "asset_name": f"Invoice_{invoice_id}",
         }
+    except HTTPException:
+        raise
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
@@ -330,27 +341,36 @@ def asa_create_invoice_prepare(req: AsaCreatePrepareReq):
 @app.post("/asa/invoices/create/submit")
 def asa_create_invoice_submit(req: AsaCreateSubmitReq):
     try:
-        tx_id = algod.send_raw_transaction(_normalize_signed_txn(req.signed_txn))
+        raw_signed_txn = _from_base64_signed_txn(_normalize_signed_txn(req.signed_txn))
+        tx_id = algod.send_raw_transaction(raw_signed_txn)
         confirmation = transaction.wait_for_confirmation(algod, tx_id, 4)
         asa_id = int(confirmation.get("asset-index", 0))
         if not asa_id:
             raise RuntimeError("ASA creation succeeded but asset-index missing in confirmation")
 
-        invoice = fetch_invoice_by_id(req.invoice_id)
-        supplier = invoice.get("owner", "")
-        if not supplier:
-            raise RuntimeError("Invoice owner is missing; cannot verify ASA ownership")
+        if req.invoice_id is not None:
+            invoice = fetch_invoice_by_id(req.invoice_id)
+            supplier = invoice.get("owner", "")
+            if not supplier:
+                raise RuntimeError("Invoice owner is missing; cannot verify ASA ownership")
 
-        if not _account_holds_asset(supplier, asa_id):
-            raise RuntimeError("Supplier does not hold the newly created ASA")
+            if not _account_holds_asset(supplier, asa_id):
+                raise RuntimeError("Supplier does not hold the newly created ASA")
 
-        updated = update_invoice_asa_record(invoice_id=req.invoice_id, asa_id=asa_id, status="TOKENIZED")
+            updated = update_invoice_asa_record(invoice_id=req.invoice_id, asa_id=asa_id, status="TOKENIZED")
+            return {
+                "message": "Invoice tokenized successfully",
+                "tx_id": tx_id,
+                "asa_id": asa_id,
+                "owner_verified": True,
+                "invoice": updated,
+            }
+
         return {
-            "message": "Invoice tokenized successfully",
+            "message": "Invoice Created on Testnet!",
+            "txid": tx_id,
             "tx_id": tx_id,
             "asa_id": asa_id,
-            "owner_verified": True,
-            "invoice": updated,
         }
     except HTTPException:
         raise
@@ -445,8 +465,7 @@ def asa_submit_funding(invoice_id: Union[int, str], req: InvoiceFundingSubmitReq
         )
 
         grouped_blob = b"".join(base64.b64decode(stxn) for stxn in raw_signed_b64)
-        grouped_blob_b64 = base64.b64encode(grouped_blob).decode("utf-8")
-        tx_id = algod.send_raw_transaction(grouped_blob_b64)
+        tx_id = algod.send_raw_transaction(grouped_blob)
         transaction.wait_for_confirmation(algod, tx_id, 4)
 
         if not _account_holds_asset(req.investor, asa_id):
